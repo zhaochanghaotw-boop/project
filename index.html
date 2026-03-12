@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
     <title>HONOR Magic V6 头像生成器</title>
     <style>
         * { margin:0; padding:0; box-sizing: border-box; }
@@ -47,7 +45,41 @@
             margin-top: 12px;
             line-height: 1.6;
         }
+        
+        /* 预览裁切区 */
+        .preview-section { display: none; margin-bottom: 16px; }
+        .preview-section.show { display: block; }
+        .preview-title { font-size: 14px; color: #ccc; margin-bottom: 10px; text-align: center; }
+        .preview-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            margin: 0 auto;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            cursor: move;
+            touch-action: none;
+        }
+        .preview-container.circle { border-radius: 50%; }
+        .preview-container img {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .preview-mask {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+        }
+        .preview-container.circle .preview-mask { box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.5); }
+        .preview-container:not(.circle) .preview-mask { box-shadow: inset 40px 40px 60px 60px rgba(0,0,0,0.5), inset -40px -40px 60px 60px rgba(0,0,0,0.5); }
+        .preview-hint { text-align: center; color: #888; font-size: 12px; margin-top: 8px; }
+        
+        /* 模板选择 */
         .template-section { margin-bottom: 16px; }
+        .template-section.hidden { display: none; }
         .template-title { font-size: 14px; margin-bottom: 10px; color: #ccc; text-align: center; }
         .templates { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
         .template-item {
@@ -63,45 +95,8 @@
         .template-item img { width: 100%; height: 100%; object-fit: cover; }
         .template-label { text-align: center; font-size: 14px; color: #aaa; margin-top: 8px; }
         
-        .crop-section { display: none; margin-bottom: 16px; }
-        .crop-section.show { display: block; }
-        .crop-title { font-size: 14px; color: #ccc; margin-bottom: 10px; text-align: center; }
-        .crop-container {
-            position: relative;
-            width: 280px;
-            height: 280px;
-            margin: 0 auto;
-            border-radius: 12px;
-            overflow: hidden;
-            background: #000;
-        }
-        .crop-container.circle { border-radius: 50%; }
-        .crop-image-wrapper {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            cursor: move;
-            touch-action: none;
-        }
-        .crop-image-wrapper img {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transform-origin: center;
-        }
-        .crop-mask {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            pointer-events: none;
-        }
-        .crop-container.circle .crop-mask { box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.5); }
-        .crop-container:not(.circle) .crop-mask { box-shadow: inset 40px 40px 60px 60px rgba(0,0,0,0.5), inset -40px -40px 60px 60px rgba(0,0,0,0.5); }
-        .crop-hint { text-align: center; color: #888; font-size: 12px; margin-top: 8px; }
-        
         .result-section { display: none; text-align: center; margin-top: 20px; }
         .result-section.show { display: block; }
-        .result-canvas { max-width: 100%; border-radius: 12px; margin-bottom: 16px; }
         .save-btn {
             display: inline-block;
             padding: 16px 40px;
@@ -114,8 +109,8 @@
         }
         .footer-tips { text-align: center; color: #666; font-size: 12px; margin-top: 20px; }
         
-        /* 隐藏的文件输入 */
-        #fileInput { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+        #fileInput { display: none; }
+        #cameraInput { display: none; }
     </style>
 </head>
 <body>
@@ -123,19 +118,27 @@
         <h1>✨ HONOR Magic V6 头像生成器</h1>
         
         <div class="upload-section">
-            <label class="upload-btn" for="fileInput">
+            <label class="upload-btn" id="uploadBtn">
                 📷 选择头像 / Select Photo
             </label>
-            <input type="file" id="fileInput" accept="image/*" capture="environment">
+            <input type="file" id="fileInput" accept="image/*">
+            <input type="file" id="cameraInput" accept="image/*" capture="environment">
             <div class="tips">
-                📌 上传说明 / Upload Tips:<br>
-                无论上传什么尺寸图片，系统会自动裁剪为正方形<br>
-                支持拖动调整头像位置<br>
+                📌 上传说明: 点击选择相册 / 拍照<br>
                 Any size will be cropped to square • Drag to adjust
             </div>
         </div>
         
-        <div class="template-section" id="templateSection" style="display:none;">
+        <div class="preview-section" id="previewSection">
+            <div class="preview-title">📍 拖动调整位置 / Drag to Adjust</div>
+            <div class="preview-container" id="previewContainer">
+                <img id="previewImg">
+                <div class="preview-mask"></div>
+            </div>
+            <div class="preview-hint">👆 拖动图片调整位置</div>
+        </div>
+        
+        <div class="template-section" id="templateSection">
             <div class="template-title">选择模板 / Select Template</div>
             <div class="templates">
                 <div>
@@ -153,26 +156,15 @@
             </div>
         </div>
         
-        <div class="crop-section" id="cropSection">
-            <div class="crop-title">📍 拖动调整位置 / Drag to Adjust</div>
-            <div class="crop-container" id="cropContainer">
-                <div class="crop-image-wrapper" id="cropWrapper">
-                    <img id="cropImg">
-                </div>
-                <div class="crop-mask"></div>
-            </div>
-            <div class="crop-hint">👆 拖动图片调整位置</div>
-        </div>
-        
         <div class="result-section" id="resultSection">
-            <canvas id="resultCanvas" class="result-canvas"></canvas>
-            <br>
+            <canvas id="resultCanvas" width="1080" height="1080"></canvas>
+            <br><br>
             <a class="save-btn" id="saveBtn" download="honor_magic_v6_avatar.png">💾 保存头像 Save Avatar</a>
         </div>
         
         <div class="footer-tips">
-            点击模板立即生成预览 • 长按保存图片<br>
-            Click template to preview • Long press to save
+            长按保存图片<br>
+            Long press to save
         </div>
     </div>
     
@@ -183,7 +175,6 @@
         document.getElementById('circleImg').src = circleB64;
         document.getElementById('squareImg').src = squareB64;
         
-        let userAvatar = null;
         let croppedAvatar = null;
         let selectedTemplate = 0;
         let cropOffsetX = 0;
@@ -191,7 +182,31 @@
         let isDragging = false;
         let startX, startY;
         
-        // 压缩图片（解决安卓拍照超大图问题）
+        // 点击选择头像 - 弹出相册
+        document.getElementById('uploadBtn').addEventListener('click', function() {
+            document.getElementById('fileInput').click();
+        });
+        
+        // 长按选择摄像头
+        let pressTimer;
+        document.getElementById('uploadBtn').addEventListener('touchstart', function(e) {
+            pressTimer = setTimeout(function() {
+                document.getElementById('cameraInput').click();
+            }, 500);
+        });
+        document.getElementById('uploadBtn').addEventListener('touchend', function() {
+            clearTimeout(pressTimer);
+        });
+        document.getElementById('uploadBtn').addEventListener('mousedown', function() {
+            pressTimer = setTimeout(function() {
+                document.getElementById('cameraInput').click();
+            }, 500);
+        });
+        document.getElementById('uploadBtn').addEventListener('mouseup', function() {
+            clearTimeout(pressTimer);
+        });
+        
+        // 压缩图片
         function compressImage(src, callback) {
             const img = new Image();
             img.onload = function() {
@@ -203,36 +218,32 @@
                 } else {
                     if (h > maxSize) { w = w * maxSize / h; h = maxSize; }
                 }
-                const tempCanvas = document.createElement("canvas");
-                const tempCtx = tempCanvas.getContext("2d");
-                tempCanvas.width = w;
-                tempCanvas.height = h;
-                tempCtx.drawImage(img, 0, 0, w, h);
+                const canvas = document.createElement("canvas");
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext("2d").drawImage(img, 0, 0, w, h);
                 const compressed = new Image();
                 compressed.onload = function() { callback(compressed); };
-                compressed.src = tempCanvas.toDataURL("image/jpeg", 0.9);
+                compressed.src = canvas.toDataURL("image/jpeg", 0.9);
             };
             img.src = src;
         }
         
-        // 裁切为正方形
+        // 裁切正方形
         function cropToSquare(img) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             const size = Math.min(img.width, img.height);
             canvas.width = size;
             canvas.height = size;
-            const sx = (img.width - size) / 2;
-            const sy = (img.height - size) / 2;
-            ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
+            ctx.drawImage(img, (img.width - size) / 2, (img.height - size) / 2, size, size, 0, 0, size, size);
             const cropped = new Image();
             cropped.src = canvas.toDataURL('image/png');
             return cropped;
         }
         
-        // 文件上传处理
-        document.getElementById('fileInput').addEventListener('change', function(e) {
-            const file = e.target.files[0];
+        // 处理文件上传
+        function handleFile(file) {
             if (!file) return;
             if (file.size > 10*1024*1024) {
                 alert("图片太大，请重新选择");
@@ -241,49 +252,56 @@
             const reader = new FileReader();
             reader.onload = function(event) {
                 compressImage(event.target.result, function(compressed) {
-                    userAvatar = compressed;
                     croppedAvatar = cropToSquare(compressed);
                     croppedAvatar.onload = function() {
                         cropOffsetX = 0;
                         cropOffsetY = 0;
-                        updateCropImage();
-                        document.getElementById('templateSection').style.display = 'block';
-                        document.getElementById('cropSection').classList.add('show');
+                        updatePreview();
+                        document.getElementById('previewSection').classList.add('show');
+                        document.getElementById('templateSection').classList.remove('hidden');
                         generatePreview();
                     };
                 });
             };
             reader.readAsDataURL(file);
+        }
+        
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            handleFile(e.target.files[0]);
         });
         
+        document.getElementById('cameraInput').addEventListener('change', function(e) {
+            handleFile(e.target.files[0]);
+        });
+        
+        // 切换模板
         function changeTemplate(index) {
             selectedTemplate = index;
             document.querySelectorAll('.template-item').forEach((item, i) => {
                 item.classList.toggle('active', i === index);
             });
-            const cropContainer = document.getElementById('cropContainer');
-            cropContainer.classList.toggle('circle', index === 0);
+            document.getElementById('previewContainer').classList.toggle('circle', index === 0);
             generatePreview();
         }
         
-        function updateCropImage() {
-            const cropImg = document.getElementById('cropImg');
+        function updatePreview() {
+            const previewImg = document.getElementById('previewImg');
             if (croppedAvatar) {
-                cropImg.src = croppedAvatar.src;
-                cropImg.style.transform = `translate(${cropOffsetX}px, ${cropOffsetY}px)`;
+                previewImg.src = croppedAvatar.src;
+                previewImg.style.transform = `translate(${cropOffsetX}px, ${cropOffsetY}px)`;
             }
         }
         
         // 拖动功能
-        const cropWrapper = document.getElementById('cropWrapper');
-        function getEventPos(e) {
+        const previewContainer = document.getElementById('previewContainer');
+        function getPos(e) {
             if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
             return { x: e.clientX, y: e.clientY };
         }
         function startDrag(e) {
             e.preventDefault();
             isDragging = true;
-            const pos = getEventPos(e);
+            const pos = getPos(e);
             startX = pos.x - cropOffsetX;
             startY = pos.y - cropOffsetY;
             document.addEventListener('mousemove', doDrag);
@@ -294,13 +312,10 @@
         function doDrag(e) {
             if (!isDragging) return;
             e.preventDefault();
-            const pos = getEventPos(e);
-            cropOffsetX = pos.x - startX;
-            cropOffsetY = pos.y - startY;
-            const maxOffset = 50;
-            cropOffsetX = Math.max(-maxOffset, Math.min(maxOffset, cropOffsetX));
-            cropOffsetY = Math.max(-maxOffset, Math.min(maxOffset, cropOffsetY));
-            updateCropImage();
+            const pos = getPos(e);
+            cropOffsetX = Math.max(-50, Math.min(50, pos.x - startX));
+            cropOffsetY = Math.max(-50, Math.min(50, pos.y - startY));
+            updatePreview();
             generatePreview();
         }
         function stopDrag() {
@@ -310,51 +325,37 @@
             document.removeEventListener('touchmove', doDrag);
             document.removeEventListener('touchend', stopDrag);
         }
-        cropWrapper.addEventListener('mousedown', startDrag);
-        cropWrapper.addEventListener('touchstart', startDrag, { passive: false });
+        previewContainer.addEventListener('mousedown', startDrag);
+        previewContainer.addEventListener('touchstart', startDrag, { passive: false });
         
+        // 生成预览
         function generatePreview() {
             if (!croppedAvatar) return;
             const canvas = document.getElementById('resultCanvas');
             const ctx = canvas.getContext('2d');
             const size = 1080;
-            canvas.width = size;
-            canvas.height = size;
-            const circleImg = document.getElementById('circleImg');
-            const squareImg = document.getElementById('squareImg');
             ctx.clearRect(0, 0, size, size);
+            
             const scale = 1080 / 280;
             const offsetX = cropOffsetX * scale;
             const offsetY = cropOffsetY * scale;
             
+            ctx.save();
             if (selectedTemplate === 0) {
-                ctx.save();
                 ctx.beginPath();
                 ctx.arc(540, 540, 500, 0, Math.PI * 2);
                 ctx.closePath();
                 ctx.clip();
-                ctx.drawImage(croppedAvatar, offsetX, offsetY, size, size);
-                ctx.restore();
             } else {
-                ctx.save();
-                const x = 40, y = 40, w = 1000, h = 1000, r = 60;
                 ctx.beginPath();
-                ctx.moveTo(x + r, y);
-                ctx.lineTo(x + w - r, y);
-                ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-                ctx.lineTo(x + w, y + h - r);
-                ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-                ctx.lineTo(x + r, y + h);
-                ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-                ctx.lineTo(x, y + r);
-                ctx.quadraticCurveTo(x, y, x + r, y);
+                ctx.rect(40, 40, 1000, 1000);
                 ctx.closePath();
                 ctx.clip();
-                ctx.drawImage(croppedAvatar, offsetX, offsetY, size, size);
-                ctx.restore();
             }
+            ctx.drawImage(croppedAvatar, offsetX, offsetY, size, size);
+            ctx.restore();
             
-            const templateImg = selectedTemplate === 0 ? circleImg : squareImg;
+            const templateImg = selectedTemplate === 0 ? document.getElementById('circleImg') : document.getElementById('squareImg');
             if (templateImg.complete) {
                 ctx.drawImage(templateImg, 0, 0, size, size);
                 document.getElementById('resultSection').classList.add('show');
