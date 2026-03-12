@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>HONOR Magic V6 头像生成器</title>
     <style>
         * { margin:0; padding:0; box-sizing: border-box; }
@@ -12,6 +12,7 @@
             min-height: 100vh;
             padding: 20px;
             color: #fff;
+            -webkit-tap-highlight-color: transparent;
         }
         .container { max-width: 480px; margin: 0 auto; }
         h1 {
@@ -37,8 +38,15 @@
             cursor: pointer;
             font-size: 18px;
             font-weight: bold;
+            -webkit-tap-highlight-color: transparent;
         }
-        #fileInput { display: none; }
+        #fileInput { 
+            position: absolute; 
+            width: 1px; 
+            height: 1px; 
+            opacity: 0; 
+            overflow: hidden; 
+        }
         .tips {
             color: #aaa;
             font-size: 13px;
@@ -60,6 +68,60 @@
         .template-item.active { border-color: #ff4d4d; transform: scale(1.03); }
         .template-item img { width: 100%; height: 100%; object-fit: cover; }
         .template-label { text-align: center; font-size: 14px; color: #aaa; margin-top: 8px; }
+        
+        .crop-section { 
+            display: none; 
+            margin-bottom: 16px;
+        }
+        .crop-section.show { display: block; }
+        .crop-title {
+            font-size: 14px; color: #ccc; margin-bottom: 10px;
+            text-align: center;
+        }
+        .crop-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            margin: 0 auto;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+        }
+        .crop-container.circle {
+            border-radius: 50%;
+        }
+        .crop-image-wrapper {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            cursor: move;
+            touch-action: none;
+        }
+        .crop-image-wrapper img {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform-origin: center;
+        }
+        .crop-mask {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+        }
+        .crop-container.circle .crop-mask {
+            box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.5);
+        }
+        .crop-container:not(.circle) .crop-mask {
+            box-shadow: inset 40px 40px 60px 60px rgba(0,0,0,0.5), inset -40px -40px 60px 60px rgba(0,0,0,0.5);
+        }
+        .crop-hint {
+            text-align: center;
+            color: #888;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        
         .result-section { display: none; text-align: center; margin-top: 20px; }
         .result-section.show { display: block; }
         .result-canvas { max-width: 100%; border-radius: 12px; margin-bottom: 16px; }
@@ -81,19 +143,20 @@
         <h1>✨ HONOR Magic V6 头像生成器</h1>
         
         <div class="upload-section">
-            <label class="upload-btn">
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
                 📷 选择头像 / Select Photo
-                <input type="file" id="fileInput" accept="image/*">
-            </label>
+            </button>
+            <input type="file" id="fileInput" accept="image/*" capture="environment">
             <div class="tips">
                 📌 上传说明 / Upload Tips:<br>
                 无论上传什么尺寸图片，系统会自动裁剪为正方形<br>
-                Any size will be cropped to square automatically
+                支持拖动调整头像位置<br>
+                Any size will be cropped to square • Drag to adjust position
             </div>
         </div>
         
         <div class="template-section" id="templateSection" style="display:none;">
-            <div class="template-title">选择模板 / Select Template (点击立即生成)</div>
+            <div class="template-title">选择模板 / Select Template</div>
             <div class="templates">
                 <div>
                     <div class="template-item active" data-index="0" onclick="changeTemplate(0)">
@@ -108,6 +171,17 @@
                     <div class="template-label">🟦 方形 Square</div>
                 </div>
             </div>
+        </div>
+        
+        <div class="crop-section" id="cropSection">
+            <div class="crop-title">📍 拖动调整位置 / Drag to Adjust</div>
+            <div class="crop-container" id="cropContainer">
+                <div class="crop-image-wrapper" id="cropWrapper">
+                    <img id="cropImg">
+                </div>
+                <div class="crop-mask"></div>
+            </div>
+            <div class="crop-hint">👆 拖动图片调整位置</div>
         </div>
         
         <div class="result-section" id="resultSection">
@@ -129,8 +203,14 @@
         document.getElementById('circleImg').src = circleB64;
         document.getElementById('squareImg').src = squareB64;
         
+        let userAvatar = null;
         let croppedAvatar = null;
         let selectedTemplate = 0;
+        
+        let cropOffsetX = 0;
+        let cropOffsetY = 0;
+        let isDragging = false;
+        let startX, startY;
         
         function cropToSquare(img) {
             const canvas = document.createElement('canvas');
@@ -154,9 +234,15 @@
             reader.onload = function(event) {
                 const img = new Image();
                 img.onload = function() {
+                    userAvatar = img;
                     croppedAvatar = cropToSquare(img);
                     croppedAvatar.onload = function() {
+                        cropOffsetX = 0;
+                        cropOffsetY = 0;
+                        updateCropImage();
+                        
                         document.getElementById('templateSection').style.display = 'block';
+                        document.getElementById('cropSection').classList.add('show');
                         generatePreview();
                     };
                 };
@@ -170,7 +256,71 @@
             document.querySelectorAll('.template-item').forEach((item, i) => {
                 item.classList.toggle('active', i === index);
             });
+            
+            const cropContainer = document.getElementById('cropContainer');
+            if (index === 0) {
+                cropContainer.classList.add('circle');
+            } else {
+                cropContainer.classList.remove('circle');
+            }
+            
             generatePreview();
+        }
+        
+        function updateCropImage() {
+            const cropImg = document.getElementById('cropImg');
+            if (croppedAvatar) {
+                cropImg.src = croppedAvatar.src;
+                cropImg.style.transform = `translate(${cropOffsetX}px, ${cropOffsetY}px)`;
+            }
+        }
+        
+        const cropWrapper = document.getElementById('cropWrapper');
+        
+        function getEventPos(e) {
+            if (e.touches) {
+                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            return { x: e.clientX, y: e.clientY };
+        }
+        
+        cropWrapper.addEventListener('mousedown', startDrag);
+        cropWrapper.addEventListener('touchstart', startDrag, { passive: false });
+        
+        function startDrag(e) {
+            e.preventDefault();
+            isDragging = true;
+            const pos = getEventPos(e);
+            startX = pos.x - cropOffsetX;
+            startY = pos.y - cropOffsetY;
+            
+            document.addEventListener('mousemove', doDrag);
+            document.addEventListener('mouseup', stopDrag);
+            document.addEventListener('touchmove', doDrag, { passive: false });
+            document.addEventListener('touchend', stopDrag);
+        }
+        
+        function doDrag(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+            const pos = getEventPos(e);
+            cropOffsetX = pos.x - startX;
+            cropOffsetY = pos.y - startY;
+            
+            const maxOffset = 50;
+            cropOffsetX = Math.max(-maxOffset, Math.min(maxOffset, cropOffsetX));
+            cropOffsetY = Math.max(-maxOffset, Math.min(maxOffset, cropOffsetY));
+            
+            updateCropImage();
+            generatePreview();
+        }
+        
+        function stopDrag() {
+            isDragging = false;
+            document.removeEventListener('mousemove', doDrag);
+            document.removeEventListener('mouseup', stopDrag);
+            document.removeEventListener('touchmove', doDrag);
+            document.removeEventListener('touchend', stopDrag);
         }
         
         function generatePreview() {
@@ -187,17 +337,19 @@
             
             ctx.clearRect(0, 0, size, size);
             
+            const scale = 1080 / 280;
+            const offsetX = cropOffsetX * scale;
+            const offsetY = cropOffsetY * scale;
+            
             if (selectedTemplate === 0) {
-                // 圆形模板 - 头像裁剪为圆形
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(540, 540, 500, 0, Math.PI * 2);
                 ctx.closePath();
                 ctx.clip();
-                ctx.drawImage(croppedAvatar, 0, 0, size, size);
+                ctx.drawImage(croppedAvatar, offsetX, offsetY, size, size);
                 ctx.restore();
             } else {
-                // 方形模板 - 头像裁剪为圆角矩形（与模板形状匹配）
                 ctx.save();
                 const x = 40, y = 40, w = 1000, h = 1000, r = 60;
                 ctx.beginPath();
@@ -212,11 +364,10 @@
                 ctx.quadraticCurveTo(x, y, x + r, y);
                 ctx.closePath();
                 ctx.clip();
-                ctx.drawImage(croppedAvatar, 0, 0, size, size);
+                ctx.drawImage(croppedAvatar, offsetX, offsetY, size, size);
                 ctx.restore();
             }
             
-            // 画模板
             const templateImg = selectedTemplate === 0 ? circleImg : squareImg;
             if (templateImg.complete) {
                 ctx.drawImage(templateImg, 0, 0, size, size);
