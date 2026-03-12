@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>HONOR Magic V6 头像生成器</title>
     <style>
@@ -68,8 +68,6 @@
             border-radius: 12px;
             overflow: hidden;
             background: #000;
-            cursor: move;
-            touch-action: none;
         }
         .preview-container.circle { border-radius: 50%; }
         .preview-container img { width: 100%; height: 100%; }
@@ -88,9 +86,6 @@
             text-decoration: none;
         }
         .footer-tips { text-align: center; color: #666; font-size: 12px; margin-top: 20px; }
-        
-        #fileInput { display: none; }
-        #cameraInput { display: none; }
     </style>
 </head>
 <body>
@@ -98,25 +93,24 @@
         <h1>✨ HONOR Magic V6 头像生成器</h1>
         
         <div class="upload-section">
-            <label class="upload-btn" id="uploadBtn">
+            <div class="upload-btn" onclick="document.getElementById('fileInput').click()">
                 📷 选择头像 / Select Photo
-            </label>
-            <input type="file" id="fileInput" accept="image/*">
-            <input type="file" id="cameraInput" accept="image/*" capture="environment">
-            <div class="tips">点击选择相册 / 长按拍照</div>
+            </div>
+            <input type="file" id="fileInput" accept="image/*" style="display:none">
+            <div class="tips">点击选择相册图片</div>
         </div>
         
         <div class="template-section" id="templateSection">
             <div class="template-title">选择模板 / Select Template</div>
             <div class="templates">
                 <div>
-                    <div class="template-item active" data-index="0" onclick="changeTemplate(0)">
+                    <div class="template-item active" onclick="changeTemplate(0)">
                         <img id="circleImg">
                     </div>
                     <div class="template-label">🔵 圆形</div>
                 </div>
                 <div>
-                    <div class="template-item" data-index="1" onclick="changeTemplate(1)">
+                    <div class="template-item" onclick="changeTemplate(1)">
                         <img id="squareImg">
                     </div>
                     <div class="template-label">🟦 方形</div>
@@ -150,68 +144,40 @@
         let selectedTemplate = 0;
         let cropOffsetX = 0;
         let cropOffsetY = 0;
-        let isDragging = false;
-        let startX, startY;
         
-        document.getElementById('uploadBtn').addEventListener('click', function() {
-            document.getElementById('fileInput').click();
-        });
-        
-        let pressTimer;
-        document.getElementById('uploadBtn').addEventListener('touchstart', function(e) {
-            pressTimer = setTimeout(function() { document.getElementById('cameraInput').click(); }, 500);
-        });
-        document.getElementById('uploadBtn').addEventListener('touchend', function() { clearTimeout(pressTimer); });
-        
-        function compressImage(src, callback) {
-            const img = new Image();
-            img.onload = function() {
-                const maxSize = 1600;
-                let w = img.width, h = img.height;
-                if (w > h) { if (w > maxSize) { h = h * maxSize / w; w = maxSize; } }
-                else { if (h > maxSize) { w = w * maxSize / h; h = maxSize; } }
-                const canvas = document.createElement("canvas");
-                canvas.width = w; canvas.height = h;
-                canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-                const compressed = new Image();
-                compressed.onload = function() { callback(compressed); };
-                compressed.src = canvas.toDataURL("image/jpeg", 0.9);
-            };
-            img.src = src;
-        }
-        
-        function cropToSquare(img) {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const size = Math.min(img.width, img.height);
-            canvas.width = size; canvas.height = size;
-            ctx.drawImage(img, (img.width - size) / 2, (img.height - size) / 2, size, size, 0, 0, size, size);
-            const cropped = new Image();
-            cropped.src = canvas.toDataURL('image/png');
-            return cropped;
-        }
-        
-        function handleFile(file) {
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
             if (!file) return;
-            if (file.size > 10*1024*1024) { alert("图片太大"); return; }
+            
             const reader = new FileReader();
             reader.onload = function(event) {
-                compressImage(event.target.result, function(compressed) {
-                    croppedAvatar = cropToSquare(compressed);
+                const img = new Image();
+                img.onload = function() {
+                    // 压缩
+                    const maxSize = 1200;
+                    let w = img.width, h = img.height;
+                    if (w > h) { if (w > maxSize) { h = h * maxSize / w; w = maxSize; } }
+                    else { if (h > maxSize) { w = w * maxSize / h; h = maxSize; } }
+                    
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    
+                    croppedAvatar = new Image();
                     croppedAvatar.onload = function() {
                         cropOffsetX = 0; cropOffsetY = 0;
                         document.getElementById('previewSection').classList.add('show');
                         document.getElementById('saveSection').classList.add('show');
                         document.getElementById('previewContainer').classList.toggle('circle', selectedTemplate === 0);
+                        initDrag();
                         updatePreview();
                     };
-                });
+                    croppedAvatar.src = canvas.toDataURL('image/jpeg', 0.85);
+                };
+                img.src = event.target.result;
             };
             reader.readAsDataURL(file);
-        }
-        
-        document.getElementById('fileInput').addEventListener('change', function(e) { handleFile(e.target.files[0]); });
-        document.getElementById('cameraInput').addEventListener('change', function(e) { handleFile(e.target.files[0]); });
+        });
         
         function changeTemplate(index) {
             selectedTemplate = index;
@@ -222,9 +188,6 @@
             updatePreview();
         }
         
-        // 预览尺寸：280px，模板也是280px
-        // 圆形：中心(140,140)，半径135（对应1080下的半径500）
-        // 方形：内边距15px（对应1080下的40px）
         function updatePreview() {
             if (!croppedAvatar) return;
             const size = 280;
@@ -232,32 +195,26 @@
             canvas.width = size; canvas.height = size;
             const ctx = canvas.getContext('2d');
             
-            // 缩放比例：280/1080
-            const scale = size / 1080;
-            const offsetX = cropOffsetX * (1080/280) * scale;
-            const offsetY = cropOffsetY * (1080/280) * scale;
+            const offsetX = cropOffsetX;
+            const offsetY = cropOffsetY;
             
-            // 裁切
+            ctx.drawImage(croppedAvatar, offsetX, offsetY, size, size);
+            
             ctx.save();
             if (selectedTemplate === 0) {
-                // 圆形：中心140,140，半径135
                 ctx.beginPath();
-                ctx.arc(140, 140, 135, 0, Math.PI * 2);
+                ctx.arc(140, 140, 129, 0, Math.PI * 2);
                 ctx.closePath();
                 ctx.clip();
             } else {
-                // 方形：内边距15px (40/1080*280≈10.3，实际用15更接近)
                 ctx.beginPath();
-                ctx.rect(15, 15, 250, 250);
+                ctx.rect(10, 10, 260, 260);
                 ctx.closePath();
                 ctx.clip();
             }
-            
-            // 画头像（充满整个画布，自动适配）
-            ctx.drawImage(croppedAvatar, 0, 0, size, size);
+            ctx.drawImage(croppedAvatar, offsetX, offsetY, size, size);
             ctx.restore();
             
-            // 叠加模板
             const templateImg = selectedTemplate === 0 ? document.getElementById('circleImg') : document.getElementById('squareImg');
             if (templateImg.complete) {
                 ctx.drawImage(templateImg, 0, 0, size, size);
@@ -273,8 +230,10 @@
             canvas.width = size; canvas.height = size;
             const ctx = canvas.getContext('2d');
             
-            const offsetX = cropOffsetX * (1080/280);
-            const offsetY = cropOffsetY * (1080/280);
+            const offsetX = cropOffsetX * 3.86;
+            const offsetY = cropOffsetY * 3.86;
+            
+            ctx.drawImage(croppedAvatar, 0, 0, size, size);
             
             ctx.save();
             if (selectedTemplate === 0) {
@@ -299,39 +258,44 @@
             document.getElementById('saveBtn').href = canvas.toDataURL('image/png');
         }
         
-        const container = document.getElementById('previewContainer');
-        function getPos(e) {
-            if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-            return { x: e.clientX, y: e.clientY };
+        function initDrag() {
+            const container = document.getElementById('previewContainer');
+            let isDragging = false;
+            let startX, startY;
+            
+            function getPos(e) {
+                if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                return { x: e.clientX, y: e.clientY };
+            }
+            
+            function start(e) {
+                e.preventDefault();
+                isDragging = true;
+                const pos = getPos(e);
+                startX = pos.x - cropOffsetX;
+                startY = pos.y - cropOffsetY;
+            }
+            
+            function move(e) {
+                if (!isDragging) return;
+                e.preventDefault();
+                const pos = getPos(e);
+                cropOffsetX = Math.max(-60, Math.min(60, pos.x - startX));
+                cropOffsetY = Math.max(-60, Math.min(60, pos.y - startY));
+                updatePreview();
+            }
+            
+            function end() {
+                isDragging = false;
+            }
+            
+            container.addEventListener('mousedown', start);
+            container.addEventListener('touchstart', start, {passive: false});
+            document.addEventListener('mousemove', move);
+            document.addEventListener('touchmove', move, {passive: false});
+            document.addEventListener('mouseup', end);
+            document.addEventListener('touchend', end);
         }
-        function startDrag(e) {
-            e.preventDefault();
-            isDragging = true;
-            const pos = getPos(e);
-            startX = pos.x - cropOffsetX;
-            startY = pos.y - cropOffsetY;
-            document.addEventListener('mousemove', doDrag);
-            document.addEventListener('mouseup', stopDrag);
-            document.addEventListener('touchmove', doDrag, { passive: false });
-            document.addEventListener('touchend', stopDrag);
-        }
-        function doDrag(e) {
-            if (!isDragging) return;
-            e.preventDefault();
-            const pos = getPos(e);
-            cropOffsetX = Math.max(-50, Math.min(50, pos.x - startX));
-            cropOffsetY = Math.max(-50, Math.min(50, pos.y - startY));
-            updatePreview();
-        }
-        function stopDrag() {
-            isDragging = false;
-            document.removeEventListener('mousemove', doDrag);
-            document.removeEventListener('mouseup', stopDrag);
-            document.removeEventListener('touchmove', doDrag);
-            document.removeEventListener('touchend', stopDrag);
-        }
-        container.addEventListener('mousedown', startDrag);
-        container.addEventListener('touchstart', startDrag, { passive: false });
     </script>
 </body>
 </html>
