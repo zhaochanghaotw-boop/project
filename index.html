@@ -67,24 +67,41 @@
             border-radius: 12px;
             overflow: hidden;
             background: #000;
+            -webkit-touch-callout: default;
+            -webkit-user-select: all;
+            user-select: all;
         }
         .preview-container.circle { border-radius: 50%; }
-        .preview-container img { width: 100%; height: 100%; }
-        .preview-hint { color: #888; font-size: 12px; margin-top: 8px; }
-        
-        .save-section { display: none; text-align: center; margin-top: 20px; }
-        .save-section.show { display: block; }
-        .save-btn {
-            display: inline-block;
-            padding: 16px 40px;
-            background: #22c55e;
-            border-radius: 30px;
+        .preview-container img { 
+            width: 100%; 
+            height: 100%; 
+            -webkit-touch-callout: default;
+            -webkit-user-select: all;
+            user-select: all;
+        }
+        .save-hint {
+            display: none;
+            background: linear-gradient(90deg, #22c55e, #16a34a);
             color: #fff;
             font-size: 18px;
             font-weight: bold;
-            cursor: pointer;
+            padding: 16px 32px;
+            border-radius: 30px;
+            margin: 20px auto;
+            width: 280px;
+            text-align: center;
         }
-        .footer-tips { text-align: center; color: #666; font-size: 12px; margin-top: 20px; }
+        .save-hint.show { display: block; }
+        .footer-tips { 
+            text-align: center; 
+            color: #22c55e; 
+            font-size: 16px; 
+            font-weight: bold;
+            margin-top: 20px;
+            padding: 12px;
+            background: rgba(34, 197, 94, 0.2);
+            border-radius: 10px;
+        }
     </style>
 </head>
 <body>
@@ -122,14 +139,15 @@
             <div class="preview-container" id="previewContainer">
                 <img id="previewImg">
             </div>
-            <div class="preview-hint">👆 拖动图片调整</div>
+            
+            <div class="save-hint" id="saveHint">
+                👆 长按上方图片保存
+            </div>
         </div>
         
-        <div class="save-section" id="saveSection">
-            <div class="save-btn" id="saveBtn">💾 保存头像</div>
+        <div class="footer-tips">
+            📱 长按预览图 → 保存到相册
         </div>
-        
-        <div class="footer-tips">长按图片保存</div>
     </div>
     
     <script>
@@ -178,7 +196,7 @@
                     croppedSquare.onload = function() {
                         cropOffsetX = 0; cropOffsetY = 0;
                         document.getElementById('previewSection').classList.add('show');
-                        document.getElementById('saveSection').classList.add('show');
+                        document.getElementById('saveHint').classList.add('show');
                         document.getElementById('previewContainer').classList.toggle('circle', selectedTemplate === 0);
                         initDrag();
                         updatePreview();
@@ -233,55 +251,40 @@
             }
             
             document.getElementById('previewImg').src = canvas.toDataURL('image/png');
-            updateSave();
-        }
-        
-        function updateSave() {
-            if (!croppedSquare) return;
-            const size = 1080;
-            const canvas = document.createElement('canvas');
-            canvas.width = size; canvas.height = size;
-            const ctx = canvas.getContext('2d');
             
-            const scale = size / 280;
-            const offsetX = cropOffsetX * scale;
-            const offsetY = cropOffsetY * scale;
+            // 生成保存用的大图
+            const saveCanvas = document.createElement('canvas');
+            saveCanvas.width = 1080;
+            saveCanvas.height = 1080;
+            const saveCtx = saveCanvas.getContext('2d');
+            const scale = 1080 / 280;
+            const saveOffsetX = cropOffsetX * scale;
+            const saveOffsetY = cropOffsetY * scale;
             
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, size, size);
+            saveCtx.fillStyle = '#ffffff';
+            saveCtx.fillRect(0, 0, 1080, 1080);
             
-            ctx.save();
+            saveCtx.save();
             if (selectedTemplate === 0) {
-                ctx.beginPath();
-                ctx.arc(540, 540, 500, 0, Math.PI * 2);
-                ctx.closePath();
-                ctx.clip();
+                saveCtx.beginPath();
+                saveCtx.arc(540, 540, 500, 0, Math.PI * 2);
+                saveCtx.closePath();
+                saveCtx.clip();
             } else {
-                ctx.beginPath();
-                ctx.rect(40, 40, 1000, 1000);
-                ctx.closePath();
-                ctx.clip();
+                saveCtx.beginPath();
+                saveCtx.rect(40, 40, 1000, 1000);
+                saveCtx.closePath();
+                saveCtx.clip();
             }
-            ctx.drawImage(croppedSquare, offsetX, offsetY, size, size);
-            ctx.restore();
+            saveCtx.drawImage(croppedSquare, saveOffsetX, saveOffsetY, 1080, 1080);
+            saveCtx.restore();
             
-            const templateImg = selectedTemplate === 0 ? document.getElementById('circleImg') : document.getElementById('squareImg');
             if (templateImg.complete) {
-                ctx.drawImage(templateImg, 0, 0, size, size);
+                saveCtx.drawImage(templateImg, 0, 0, 1080, 1080);
             }
             
-            saveDataUrl = canvas.toDataURL('image/png');
+            saveDataUrl = saveCanvas.toDataURL('image/png');
         }
-        
-        // 保存功能 - 兼容微信
-        document.getElementById('saveBtn').addEventListener('click', function() {
-            if (!saveDataUrl) return;
-            
-            // 在新窗口打开图片，让用户长按保存
-            const win = window.open();
-            win.document.write('<img src="' + saveDataUrl + '" style="max-width:100%">');
-            win.document.write('<p style="text-align:center;padding:20px;">长按图片保存到相册</p>');
-        });
         
         function initDrag() {
             const container = document.getElementById('previewContainer');
@@ -320,6 +323,45 @@
             document.addEventListener('touchmove', move, {passive: false});
             document.addEventListener('mouseup', end);
             document.addEventListener('touchend', end);
+            
+            // 长按保存功能
+            let pressTimer;
+            const previewImg = document.getElementById('previewImg');
+            
+            previewImg.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                saveImage();
+            });
+            
+            previewImg.addEventListener('touchstart', function(e) {
+                pressTimer = setTimeout(function() {
+                    saveImage();
+                }, 500);
+            });
+            
+            previewImg.addEventListener('touchend', function() {
+                clearTimeout(pressTimer);
+            });
+            
+            previewImg.addEventListener('mousedown', function(e) {
+                if (e.button === 0) {
+                    pressTimer = setTimeout(function() {
+                        saveImage();
+                    }, 500);
+                }
+            });
+            
+            previewImg.addEventListener('mouseup', function() {
+                clearTimeout(pressTimer);
+            });
+            
+            function saveImage() {
+                if (!saveDataUrl) return;
+                const win = window.open();
+                win.document.write('<meta name="viewport" content="width=device-width,initial-scale=1">');
+                win.document.write('<img src="' + saveDataUrl + '" style="max-width:100%;display:block;margin:0 auto;">');
+                win.document.write('<p style="text-align:center;padding:20px;font-size:18px;">👉 长按图片保存到相册</p>');
+            }
         }
     </script>
 </body>
