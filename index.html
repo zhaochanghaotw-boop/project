@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>HONOR Magic V6 头像生成器</title>
     <style>
         * { margin:0; padding:0; box-sizing: border-box; }
@@ -12,7 +15,6 @@
             min-height: 100vh;
             padding: 20px;
             color: #fff;
-            -webkit-tap-highlight-color: transparent;
         }
         .container { max-width: 480px; margin: 0 auto; }
         h1 {
@@ -38,14 +40,6 @@
             cursor: pointer;
             font-size: 18px;
             font-weight: bold;
-            -webkit-tap-highlight-color: transparent;
-        }
-        #fileInput { 
-            position: absolute; 
-            width: 1px; 
-            height: 1px; 
-            opacity: 0; 
-            overflow: hidden; 
         }
         .tips {
             color: #aaa;
@@ -54,7 +48,7 @@
             line-height: 1.6;
         }
         .template-section { margin-bottom: 16px; }
-        .template-title { font-size: 14px; margin-bottom: 10px; color: #ccc; }
+        .template-title { font-size: 14px; margin-bottom: 10px; color: #ccc; text-align: center; }
         .templates { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
         .template-item {
             aspect-ratio: 1;
@@ -69,15 +63,9 @@
         .template-item img { width: 100%; height: 100%; object-fit: cover; }
         .template-label { text-align: center; font-size: 14px; color: #aaa; margin-top: 8px; }
         
-        .crop-section { 
-            display: none; 
-            margin-bottom: 16px;
-        }
+        .crop-section { display: none; margin-bottom: 16px; }
         .crop-section.show { display: block; }
-        .crop-title {
-            font-size: 14px; color: #ccc; margin-bottom: 10px;
-            text-align: center;
-        }
+        .crop-title { font-size: 14px; color: #ccc; margin-bottom: 10px; text-align: center; }
         .crop-container {
             position: relative;
             width: 280px;
@@ -87,9 +75,7 @@
             overflow: hidden;
             background: #000;
         }
-        .crop-container.circle {
-            border-radius: 50%;
-        }
+        .crop-container.circle { border-radius: 50%; }
         .crop-image-wrapper {
             position: absolute;
             width: 100%;
@@ -109,18 +95,9 @@
             top: 0; left: 0; right: 0; bottom: 0;
             pointer-events: none;
         }
-        .crop-container.circle .crop-mask {
-            box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.5);
-        }
-        .crop-container:not(.circle) .crop-mask {
-            box-shadow: inset 40px 40px 60px 60px rgba(0,0,0,0.5), inset -40px -40px 60px 60px rgba(0,0,0,0.5);
-        }
-        .crop-hint {
-            text-align: center;
-            color: #888;
-            font-size: 12px;
-            margin-top: 8px;
-        }
+        .crop-container.circle .crop-mask { box-shadow: inset 0 0 0 2000px rgba(0,0,0,0.5); }
+        .crop-container:not(.circle) .crop-mask { box-shadow: inset 40px 40px 60px 60px rgba(0,0,0,0.5), inset -40px -40px 60px 60px rgba(0,0,0,0.5); }
+        .crop-hint { text-align: center; color: #888; font-size: 12px; margin-top: 8px; }
         
         .result-section { display: none; text-align: center; margin-top: 20px; }
         .result-section.show { display: block; }
@@ -136,6 +113,9 @@
             text-decoration: none;
         }
         .footer-tips { text-align: center; color: #666; font-size: 12px; margin-top: 20px; }
+        
+        /* 隐藏的文件输入 */
+        #fileInput { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
     </style>
 </head>
 <body>
@@ -143,15 +123,15 @@
         <h1>✨ HONOR Magic V6 头像生成器</h1>
         
         <div class="upload-section">
-            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+            <label class="upload-btn" for="fileInput">
                 📷 选择头像 / Select Photo
-            </button>
+            </label>
             <input type="file" id="fileInput" accept="image/*" capture="environment">
             <div class="tips">
                 📌 上传说明 / Upload Tips:<br>
                 无论上传什么尺寸图片，系统会自动裁剪为正方形<br>
                 支持拖动调整头像位置<br>
-                Any size will be cropped to square • Drag to adjust position
+                Any size will be cropped to square • Drag to adjust
             </div>
         </div>
         
@@ -206,12 +186,36 @@
         let userAvatar = null;
         let croppedAvatar = null;
         let selectedTemplate = 0;
-        
         let cropOffsetX = 0;
         let cropOffsetY = 0;
         let isDragging = false;
         let startX, startY;
         
+        // 压缩图片（解决安卓拍照超大图问题）
+        function compressImage(src, callback) {
+            const img = new Image();
+            img.onload = function() {
+                const maxSize = 1600;
+                let w = img.width;
+                let h = img.height;
+                if (w > h) {
+                    if (w > maxSize) { h = h * maxSize / w; w = maxSize; }
+                } else {
+                    if (h > maxSize) { w = w * maxSize / h; h = maxSize; }
+                }
+                const tempCanvas = document.createElement("canvas");
+                const tempCtx = tempCanvas.getContext("2d");
+                tempCanvas.width = w;
+                tempCanvas.height = h;
+                tempCtx.drawImage(img, 0, 0, w, h);
+                const compressed = new Image();
+                compressed.onload = function() { callback(compressed); };
+                compressed.src = tempCanvas.toDataURL("image/jpeg", 0.9);
+            };
+            img.src = src;
+        }
+        
+        // 裁切为正方形
         function cropToSquare(img) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -226,27 +230,28 @@
             return cropped;
         }
         
+        // 文件上传处理
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
-            
+            if (file.size > 10*1024*1024) {
+                alert("图片太大，请重新选择");
+                return;
+            }
             const reader = new FileReader();
             reader.onload = function(event) {
-                const img = new Image();
-                img.onload = function() {
-                    userAvatar = img;
-                    croppedAvatar = cropToSquare(img);
+                compressImage(event.target.result, function(compressed) {
+                    userAvatar = compressed;
+                    croppedAvatar = cropToSquare(compressed);
                     croppedAvatar.onload = function() {
                         cropOffsetX = 0;
                         cropOffsetY = 0;
                         updateCropImage();
-                        
                         document.getElementById('templateSection').style.display = 'block';
                         document.getElementById('cropSection').classList.add('show');
                         generatePreview();
                     };
-                };
-                img.src = event.target.result;
+                });
             };
             reader.readAsDataURL(file);
         });
@@ -256,14 +261,8 @@
             document.querySelectorAll('.template-item').forEach((item, i) => {
                 item.classList.toggle('active', i === index);
             });
-            
             const cropContainer = document.getElementById('cropContainer');
-            if (index === 0) {
-                cropContainer.classList.add('circle');
-            } else {
-                cropContainer.classList.remove('circle');
-            }
-            
+            cropContainer.classList.toggle('circle', index === 0);
             generatePreview();
         }
         
@@ -275,46 +274,35 @@
             }
         }
         
+        // 拖动功能
         const cropWrapper = document.getElementById('cropWrapper');
-        
         function getEventPos(e) {
-            if (e.touches) {
-                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-            }
+            if (e.touches) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
             return { x: e.clientX, y: e.clientY };
         }
-        
-        cropWrapper.addEventListener('mousedown', startDrag);
-        cropWrapper.addEventListener('touchstart', startDrag, { passive: false });
-        
         function startDrag(e) {
             e.preventDefault();
             isDragging = true;
             const pos = getEventPos(e);
             startX = pos.x - cropOffsetX;
             startY = pos.y - cropOffsetY;
-            
             document.addEventListener('mousemove', doDrag);
             document.addEventListener('mouseup', stopDrag);
             document.addEventListener('touchmove', doDrag, { passive: false });
             document.addEventListener('touchend', stopDrag);
         }
-        
         function doDrag(e) {
             if (!isDragging) return;
             e.preventDefault();
             const pos = getEventPos(e);
             cropOffsetX = pos.x - startX;
             cropOffsetY = pos.y - startY;
-            
             const maxOffset = 50;
             cropOffsetX = Math.max(-maxOffset, Math.min(maxOffset, cropOffsetX));
             cropOffsetY = Math.max(-maxOffset, Math.min(maxOffset, cropOffsetY));
-            
             updateCropImage();
             generatePreview();
         }
-        
         function stopDrag() {
             isDragging = false;
             document.removeEventListener('mousemove', doDrag);
@@ -322,21 +310,19 @@
             document.removeEventListener('touchmove', doDrag);
             document.removeEventListener('touchend', stopDrag);
         }
+        cropWrapper.addEventListener('mousedown', startDrag);
+        cropWrapper.addEventListener('touchstart', startDrag, { passive: false });
         
         function generatePreview() {
             if (!croppedAvatar) return;
-            
             const canvas = document.getElementById('resultCanvas');
             const ctx = canvas.getContext('2d');
             const size = 1080;
             canvas.width = size;
             canvas.height = size;
-            
             const circleImg = document.getElementById('circleImg');
             const squareImg = document.getElementById('squareImg');
-            
             ctx.clearRect(0, 0, size, size);
-            
             const scale = 1080 / 280;
             const offsetX = cropOffsetX * scale;
             const offsetY = cropOffsetY * scale;
