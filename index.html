@@ -82,7 +82,7 @@
             color: #fff;
             font-size: 18px;
             font-weight: bold;
-            text-decoration: none;
+            cursor: pointer;
         }
         .footer-tips { text-align: center; color: #666; font-size: 12px; margin-top: 20px; }
     </style>
@@ -126,10 +126,10 @@
         </div>
         
         <div class="save-section" id="saveSection">
-            <a class="save-btn" id="saveBtn" download="honor_avatar.png">💾 保存头像</a>
+            <div class="save-btn" id="saveBtn">💾 保存头像</div>
         </div>
         
-        <div class="footer-tips">长按保存图片</div>
+        <div class="footer-tips">长按图片保存</div>
     </div>
     
     <script>
@@ -144,6 +144,7 @@
         let selectedTemplate = 0;
         let cropOffsetX = 0;
         let cropOffsetY = 0;
+        let saveDataUrl = null;
         
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
@@ -155,7 +156,6 @@
                 img.onload = function() {
                     srcImage = img;
                     
-                    // 从中心裁剪为正方形
                     const size = Math.min(img.width, img.height);
                     const cropCanvas = document.createElement('canvas');
                     cropCanvas.width = size;
@@ -165,7 +165,6 @@
                     const sy = (img.height - size) / 2;
                     cropCtx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
                     
-                    // 压缩
                     const maxSize = 1200;
                     let w = size, h = size;
                     if (w > maxSize) { h = h * maxSize / w; w = maxSize; }
@@ -200,41 +199,6 @@
             updatePreview();
         }
         
-        function drawAvatar(ctx, size, offsetX, offsetY, isTemplate) {
-            // 1. 填充白色背景
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, size, size);
-            
-            // 2. 应用裁切
-            ctx.save();
-            if (selectedTemplate === 0) {
-                // 圆形
-                ctx.beginPath();
-                if (isTemplate) {
-                    // 模板：画整个圆形区域
-                    ctx.arc(140, 140, 135, 0, Math.PI * 2);
-                } else {
-                    ctx.arc(140, 140, 129, 0, Math.PI * 2);
-                }
-                ctx.closePath();
-                ctx.clip();
-            } else {
-                // 方形
-                ctx.beginPath();
-                if (isTemplate) {
-                    ctx.rect(0, 0, size, size);
-                } else {
-                    ctx.rect(10, 10, 260, 260);
-                }
-                ctx.closePath();
-                ctx.clip();
-            }
-            
-            // 3. 画头像
-            ctx.drawImage(croppedSquare, offsetX, offsetY, size, size);
-            ctx.restore();
-        }
-        
         function updatePreview() {
             if (!croppedSquare) return;
             const size = 280;
@@ -245,10 +209,24 @@
             const offsetX = cropOffsetX;
             const offsetY = cropOffsetY;
             
-            // 画头像（带白色背景和裁切）
-            drawAvatar(ctx, size, offsetX, offsetY, false);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, size, size);
             
-            // 叠加模板
+            ctx.save();
+            if (selectedTemplate === 0) {
+                ctx.beginPath();
+                ctx.arc(140, 140, 129, 0, Math.PI * 2);
+                ctx.closePath();
+                ctx.clip();
+            } else {
+                ctx.beginPath();
+                ctx.rect(10, 10, 260, 260);
+                ctx.closePath();
+                ctx.clip();
+            }
+            ctx.drawImage(croppedSquare, offsetX, offsetY, size, size);
+            ctx.restore();
+            
             const templateImg = selectedTemplate === 0 ? document.getElementById('circleImg') : document.getElementById('squareImg');
             if (templateImg.complete) {
                 ctx.drawImage(templateImg, 0, 0, size, size);
@@ -269,8 +247,6 @@
             const offsetX = cropOffsetX * scale;
             const offsetY = cropOffsetY * scale;
             
-            // 画头像（带白色背景和裁切）
-            // 重新计算缩放后的裁切参数
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, size, size);
             
@@ -289,14 +265,23 @@
             ctx.drawImage(croppedSquare, offsetX, offsetY, size, size);
             ctx.restore();
             
-            // 叠加模板
             const templateImg = selectedTemplate === 0 ? document.getElementById('circleImg') : document.getElementById('squareImg');
             if (templateImg.complete) {
                 ctx.drawImage(templateImg, 0, 0, size, size);
             }
             
-            document.getElementById('saveBtn').href = canvas.toDataURL('image/png');
+            saveDataUrl = canvas.toDataURL('image/png');
         }
+        
+        // 保存功能 - 兼容微信
+        document.getElementById('saveBtn').addEventListener('click', function() {
+            if (!saveDataUrl) return;
+            
+            // 在新窗口打开图片，让用户长按保存
+            const win = window.open();
+            win.document.write('<img src="' + saveDataUrl + '" style="max-width:100%">');
+            win.document.write('<p style="text-align:center;padding:20px;">长按图片保存到相册</p>');
+        });
         
         function initDrag() {
             const container = document.getElementById('previewContainer');
