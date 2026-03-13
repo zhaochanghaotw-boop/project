@@ -180,23 +180,25 @@
             reader.onload = function(event) {
                 const img = new Image();
                 img.onload = function() {
-                    const size = Math.min(img.width, img.height);
-                    const cropCanvas = document.createElement('canvas');
-                    cropCanvas.width = size;
-                    cropCanvas.height = size;
-                    const cropCtx = cropCanvas.getContext('2d');
-                    const sx = (img.width - size) / 2;
-                    const sy = (img.height - size) / 2;
-                    cropCtx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
-                    
+                    // 保持原始宽高比，不裁剪成正方形
                     const maxSize = 1200;
-                    let w = size, h = size;
-                    if (w > maxSize) { h = h * maxSize / w; w = maxSize; }
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > maxSize || h > maxSize) {
+                        if (w > h) {
+                            h = h * maxSize / w;
+                            w = maxSize;
+                        } else {
+                            w = w * maxSize / h;
+                            h = maxSize;
+                        }
+                    }
                     
                     const finalCanvas = document.createElement('canvas');
                     finalCanvas.width = w;
                     finalCanvas.height = h;
-                    finalCanvas.getContext('2d').drawImage(cropCanvas, 0, 0, w, h);
+                    const ctx = finalCanvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
                     
                     croppedSquare = new Image();
                     croppedSquare.onload = function() {
@@ -224,16 +226,37 @@
         
         function updatePreview() {
             if (!croppedSquare) return;
+            
+            // 保持原始宽高比
+            const origW = croppedSquare.width;
+            const origH = croppedSquare.height;
+            
+            // 预览区域尺寸
             const size = 280;
+            let pw, ph;
+            
+            // 纵向图片：宽度与模板一致；横向/方形图片：高度与模板一致
+            if (origH > origW) {
+                // 纵向图片 - 宽度填满模板
+                pw = size;
+                ph = pw * origH / origW;
+            } else {
+                // 横向或方形图片 - 高度填满模板
+                ph = size;
+                pw = ph * origW / origH;
+            }
+            
             const canvas = document.createElement('canvas');
             canvas.width = size; canvas.height = size;
             const ctx = canvas.getContext('2d');
             
-            const offsetX = cropOffsetX;
-            const offsetY = cropOffsetY;
-            
+            // 背景白色
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, size, size);
+            
+            // 居中绘制
+            const offsetX = cropOffsetX + (size - pw) / 2;
+            const offsetY = cropOffsetY + (size - ph) / 2;
             
             ctx.save();
             if (selectedTemplate === 0) {
@@ -247,7 +270,7 @@
                 ctx.closePath();
                 ctx.clip();
             }
-            ctx.drawImage(croppedSquare, offsetX, offsetY, size, size);
+            ctx.drawImage(croppedSquare, offsetX, offsetY, pw, ph);
             ctx.restore();
             
             const templateImg = selectedTemplate === 0 ? document.getElementById('circleImg') : document.getElementById('squareImg');
@@ -257,14 +280,31 @@
             
             document.getElementById('previewImg').src = canvas.toDataURL('image/png');
             
+            // 保存时也保持比例
+            const saveSize = 1080;
+            let sw, sh;
+            
+            // 纵向图片：宽度与模板一致；横向/方形图片：高度与模板一致
+            if (origH > origW) {
+                sw = saveSize;
+                sh = sw * origH / origW;
+            } else {
+                sh = saveSize;
+                sw = sh * origW / origH;
+            }
+            
             const saveCanvas = document.createElement('canvas');
-            saveCanvas.width = 1080;
-            saveCanvas.height = 1080;
+            saveCanvas.width = saveSize;
+            saveCanvas.height = saveSize;
             const saveCtx = saveCanvas.getContext('2d');
-            const scale = 1080 / 280;
+            const scale = saveSize / size;
             
             saveCtx.fillStyle = '#ffffff';
-            saveCtx.fillRect(0, 0, 1080, 1080);
+            saveCtx.fillRect(0, 0, saveSize, saveSize);
+            
+            // 居中绘制
+            const saveOffsetX = cropOffsetX * scale + (saveSize - sw) / 2;
+            const saveOffsetY = cropOffsetY * scale + (saveSize - sh) / 2;
             
             saveCtx.save();
             if (selectedTemplate === 0) {
@@ -278,7 +318,7 @@
                 saveCtx.closePath();
                 saveCtx.clip();
             }
-            saveCtx.drawImage(croppedSquare, cropOffsetX * scale, cropOffsetY * scale, 1080, 1080);
+            saveCtx.drawImage(croppedSquare, saveOffsetX, saveOffsetY, sw, sh);
             saveCtx.restore();
             
             if (templateImg.complete) {
