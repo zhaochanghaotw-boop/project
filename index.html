@@ -79,19 +79,6 @@
             -webkit-user-select: all;
             user-select: all;
         }
-        .save-hint {
-            display: none;
-            background: linear-gradient(90deg, #22c55e, #16a34a);
-            color: #fff;
-            font-size: 18px;
-            font-weight: bold;
-            padding: 16px 32px;
-            border-radius: 30px;
-            margin: 20px auto;
-            width: 280px;
-            text-align: center;
-        }
-        .save-hint.show { display: block; }
         .footer-tips { 
             text-align: center; 
             color: #22c55e; 
@@ -108,6 +95,22 @@
             font-size: 13px;
             margin-top: 10px;
         }
+        .download-btn {
+            display: block;
+            background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            padding: 12px 32px;
+            border-radius: 25px;
+            margin: 15px auto;
+            width: 200px;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .download-btn:active { transform: scale(0.95); }
     </style>
 </head>
 <body>
@@ -145,18 +148,15 @@
             <div class="preview-container" id="previewContainer">
                 <img id="previewImg">
             </div>
-            
-            <div class="save-hint" id="saveHint">
-                👆 长按上方图片保存
-            </div>
         </div>
         
-        <div class="footer-tips">
-            📱 长按预览图 → 保存到相册
-        </div>
         <div class="footer-tips2">
-            💡 长按无反应 请截图保存
+            💡 无法下载请截图保存
         </div>
+        
+        <button class="download-btn" id="downloadBtn" onclick="downloadImage()">
+            ⬇️ 点击下载图片
+        </button>
     </div>
     
     <script>
@@ -202,7 +202,6 @@
                     croppedSquare.onload = function() {
                         cropOffsetX = 0; cropOffsetY = 0;
                         document.getElementById('previewSection').classList.add('show');
-                        document.getElementById('saveHint').classList.add('show');
                         document.getElementById('previewContainer').classList.toggle('circle', selectedTemplate === 0);
                         initDrag();
                         updatePreview();
@@ -326,40 +325,14 @@
             document.addEventListener('touchmove', move, {passive: false});
             document.addEventListener('mouseup', end);
             document.addEventListener('touchend', end);
-            
-            let pressTimer;
-            const previewImg = document.getElementById('previewImg');
-            
-            previewImg.addEventListener('contextmenu', function(e) {
-                e.preventDefault();
-                saveImage();
-            });
-            
-            previewImg.addEventListener('touchstart', function(e) {
-                pressTimer = setTimeout(function() { saveImage(); }, 500);
-            });
-            
-            previewImg.addEventListener('touchend', function() {
-                clearTimeout(pressTimer);
-            });
-            
-            previewImg.addEventListener('mousedown', function(e) {
-                if (e.button === 0) {
-                    pressTimer = setTimeout(function() { saveImage(); }, 500);
-                }
-            });
-            
-            previewImg.addEventListener('mouseup', function() {
-                clearTimeout(pressTimer);
-            });
-            
-            function saveImage() {
-                if (!saveDataUrl) return;
-                const win = window.open();
-                win.document.write('<meta name="viewport" content="width=device-width,initial-scale=1">');
-                win.document.write('<img src="' + saveDataUrl + '" style="max-width:100%;display:block;margin:0 auto;">');
-                win.document.write('<p style="text-align:center;padding:20px;font-size:18px;">👉 长按图片保存到相册</p>');
-            }
+        }
+
+        function downloadImage() {
+            if (!saveDataUrl) return;
+            const win = window.open();
+            win.document.write('<meta name="viewport" content="width=device-width,initial-scale=1">');
+            win.document.write('<img src="' + saveDataUrl + '" style="max-width:100%;display:block;margin:0 auto;">');
+            win.document.write('<p style="text-align:center;padding:20px;font-size:18px;">👉 长按图片保存到相册</p>');
         }
     </script>
 </body>
